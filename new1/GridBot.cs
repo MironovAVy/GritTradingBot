@@ -40,13 +40,15 @@ namespace new1
             var barList =       _quik.Candles.GetLastCandles(classCode, secCode, CandleInterval.M1, 10).Result;
 
             // Выводим данные для проверки.
-            foreach (var bar in barList)
-            {
-                Console.WriteLine($" Open: {bar.Open}, High: {bar.High}, Low: {bar.Low}, Close: {bar.Close}, Volume: {bar.Volume}");
-            }
+            //foreach (var bar in barList)
+            //{
+            //    Console.WriteLine($" Open: {bar.Open}, High: {bar.High}, Low: {bar.Low}, Close: {bar.Close}, Volume: {bar.Volume}");
+            //}
 
-            var Ema  = 
 
+            var SMA = new SimpleMovingAverage(barList.Count);
+            Console.WriteLine($"{SMA.GetCurrentSMA()}");
+            
 
         }
     }
