@@ -48,7 +48,7 @@ namespace new1
 
             var SMA = new SimpleMovingAverage(barList.Count);
             Console.WriteLine($"{SMA.GetCurrentSMA()}");
-            
+
 
         }
     }

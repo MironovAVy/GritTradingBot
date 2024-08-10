@@ -144,8 +144,16 @@ namespace new1
 
         private void Robot_Click(object sender, RoutedEventArgs e)
         {
-            GridBot grid = new GridBot(5.0m,3.0m);
+            GridBot grid = new GridBot(5.0m, 3.0m);
             Log("Robot is started");
+
+
+            {
+                var secondWindow = new SMA();
+                secondWindow.Show();
+                this.Close(); // Закрываем текущее окно, если нужно
+            }
+
         }
     }
 }

@@ -1,0 +1,14 @@
+﻿<Window x:Class="new1.SMA"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:new1"
+        mc:Ignorable="d"
+        Title="SMA" Height="450" Width="800">
+    <Grid>
+        <Button Content="Button" HorizontalAlignment="Left" Margin="35,19,0,0" VerticalAlignment="Top" Height="50" Width="140" Click="Button_Click"/>
+        <TextBox  x:Name="LogTextBox" TextWrapping="Wrap" Text="TextBox" Margin="35,159,275,140"/>
+
+    </Grid>
+</Window>
