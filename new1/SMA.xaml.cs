@@ -2,131 +2,205 @@
 using QuikSharp;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Windows;
+using QuikSharp.DataStructures.Transaction;
+using System.Threading.Tasks;
 
 namespace new1
 {
     public partial class SMA : Window
     {
-        private int period;
-        private Queue<decimal> values;
-        private decimal sum;
-        private Quik _quik;
-        private string secCode = "SBER";
-        private string classCode = "";
-        private Tool tool;
-        private List<double> SMA1Values; // Список для первой SMA
-        private double currentSMA1;
-        private double currentSMA2; // Для второй SMA
+        private readonly int _period;
+        private readonly Queue<decimal> _values;
+        private decimal _sum;
+        private readonly Quik _quik;
+        private readonly string _secCode = "SBER";
+        private string _classCode;
+        private Tool _tool;
+        private readonly List<double> _sma1Values;
+        private double _currentSMA1;
+        private double _currentSMA2;
+        private double _previousSMA1;
+        private double _previousSMA2;
+        private readonly OrderManager _orderManager;
 
         public SMA()
         {
             InitializeComponent();
             LogTextBox.Text = "";
-            this.period = 10;
-            this.
-            this.values = new Queue<decimal>();
-            this.sum = 0;
-            this.SMA1Values = new List<double>();
+            _period = 10;
+            _values = new Queue<decimal>();
+            _sum = 0;
+            _sma1Values = new List<double>();
 
             _quik = new Quik();
+            _orderManager = new OrderManager(_quik, _secCode, _classCode, 0.5m);
         }
 
-        public void Log(string str)
+        public void Log(string message)
         {
             try
             {
                 this.Dispatcher.Invoke(() =>
                 {
-                    LogTextBox.AppendText(str + Environment.NewLine);
+                    LogTextBox.AppendText(message + Environment.NewLine);
                     LogTextBox.ScrollToLine(LogTextBox.LineCount - 1);
                 });
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Console.WriteLine($"Log Error: {ex.Message}");
             }
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
+        private async void Button_Click(object sender, RoutedEventArgs e)
         {
-            Log("Начинаем расчет SMA");
+            Log("Начинаем расчет SMA и отслеживание пересечений");
 
-            classCode = _quik.Class.GetSecurityClass("SPBFUT,TQBR,TQBS,TQNL,TQLV,TQNE,TQOB,QJSIM", secCode).Result;
-            tool = new Tool(_quik, secCode, classCode);
-
-            _quik.OrderBook.Subscribe(tool.ClassCode, tool.SecurityCode).Wait();
-
-            _quik.Candles.Subscribe(classCode, secCode, CandleInterval.M1);
-            _quik.Candles.NewCandle += Candles_NewCandle;
-
-            var barList = _quik.Candles.GetLastCandles(classCode, secCode, CandleInterval.M1, period).Result;
-
-            if (period <= 0)
+            try
             {
-                throw new ArgumentException("Period must be greater than zero.", nameof(period));
+                _classCode = await _quik.Class.GetSecurityClass("SPBFUT,TQBR,TQBS,TQNL,TQLV,TQNE,TQOB,QJSIM", _secCode);
+                _tool = new Tool(_quik, _secCode, _classCode);
+
+                await _quik.OrderBook.Subscribe(_tool.ClassCode, _tool.SecurityCode);
+                await _quik.Candles.Subscribe(_classCode, _secCode, CandleInterval.M1);
+                _quik.Candles.NewCandle += Candles_NewCandle;
+                _quik.Events.OnOrder += Events_OnOrder;
+
+                var barList = await _quik.Candles.GetLastCandles(_classCode, _secCode, CandleInterval.M1, _period);
+            }
+            catch (Exception ex)
+            {
+                Log($"Ошибка при инициализации: {ex.Message}");
             }
 
-            Log("SMA is started");
+            Log("SMA calculation started");
         }
 
-        private void Candles_NewCandle(Candle candle)
+        private async void Candles_NewCandle(Candle candle)
         {
-            // Добавляем новую цену и пересчитываем SMA
             AddPrice(candle.Close);
-
-            // Вычисляем значение второй SMA со сдвигом на 3
             CalculateSMA2();
-            Log($"Закрытие свечи - {candle.Close.ToString()}"); ;
 
-            // Логируем новое значение SMA1 и SMA2
-            Log($"Новое значение SMA1: {currentSMA1}, SMA2 (со сдвигом на 3): {currentSMA2}");
+            if (CheckForCross())
+            {
+                Log($"Произошло пересечение - активируем сетку ордеров c началом построения {candle.Close}");
+                await _orderManager.PlaceGridOrders(candle.Close);
+            }
+
+            Log($"Цена закрытия: {candle.Close}");
+            Log($"Новое значение SMA1: {_currentSMA1}, SMA2 (со сдвигом на 3): {_currentSMA2}");
         }
 
         private void AddPrice(decimal price)
         {
-            // Добавляем новую цену в очередь
-            values.Enqueue(price);
-            sum += price;
+            _previousSMA1 = _currentSMA1;
 
-            // Если количество элементов превышает период, удаляем старый элемент
-            if (values.Count > period)
+            _values.Enqueue(price);
+            _sum += price;
+
+            if (_values.Count > _period)
             {
-                sum -= values.Dequeue();
+                _sum -= _values.Dequeue();
             }
 
-            // Вычисляем текущее значение SMA1
-            currentSMA1 = (double)(sum / values.Count);
-            SMA1Values.Add(currentSMA1);
+            _currentSMA1 = (double)(_sum / _values.Count);
+            _sma1Values.Add(_currentSMA1);
         }
 
         private void CalculateSMA2()
         {
-            // Проверяем, достаточно ли значений для смещения на 3
-            if (SMA1Values.Count >= 3)
+            _previousSMA2 = _currentSMA2;
+
+            if (_sma1Values != null && _sma1Values.Count >= 3)
             {
-                // Устанавливаем значение SMA2 как SMA1 со сдвигом на 3
-                currentSMA2 = SMA1Values[SMA1Values.Count - 3];
+                // Используем обычный индекс для получения третьего элемента с конца списка
+                _currentSMA2 = _sma1Values[_sma1Values.Count - 3];
             }
             else
             {
-                currentSMA2 = double.NaN; // Если недостаточно данных, возвращаем NaN
+                _currentSMA2 = double.NaN; // Если недостаточно данных, возвращаем NaN
             }
         }
-
-        private double GetCurrentSMA1()
+        private bool CheckForCross()
         {
-            if (values.Count == 0)
-            {
-                throw new InvalidOperationException("Not enough data to calculate SMA.");
-            }
-
-            return currentSMA1;
+            return (_previousSMA1 < _previousSMA2 && _currentSMA1 > _currentSMA2) ||
+                   (_previousSMA1 > _previousSMA2 && _currentSMA1 < _currentSMA2);
         }
 
-        public int Count => values.Count;
+        private void Events_OnOrder(Order order)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _orderManager.HandleOrderExecution(order);
+                    Log($"Исполнен ордер: {order.Operation} по цене {order.Price}. Выставлен лимитный ордер на закрытие позиции.");
+                }
+                catch (Exception ex)
+                {
+                    Log($"Ошибка при обработке ордера: {ex.Message}");
+                }
+            });
+        }
+    }
 
-        public bool IsReady => values.Count == period;
+    public class OrderManager
+    {
+        private readonly Quik _quik;
+        private readonly string _secCode;
+        private readonly string _classCode;
+        private readonly decimal _gridStep;
+
+        public OrderManager(Quik quik, string secCode, string classCode, decimal gridStep)
+        {
+            _quik = quik;
+            _secCode = secCode;
+            _classCode = classCode;
+            _gridStep = gridStep;
+        }
+
+        public async Task PlaceGridOrders(decimal currentPrice)
+        {
+            for (int i = 1; i <= 3; i++)
+            {
+                decimal buyPrice = currentPrice - _gridStep * i;
+                await PlaceOrder(Operation.Buy, buyPrice);
+
+                decimal sellPrice = currentPrice + _gridStep * i;
+                await PlaceOrder(Operation.Sell, sellPrice);
+            }
+        }
+
+        private async Task PlaceOrder(Operation operation, decimal price)
+        {
+            try
+            {
+                var order = new Order
+                {
+                    ClassCode = _classCode,
+                    SecCode = _secCode,
+                    Price = price,
+                    Quantity = 1,
+                    Operation = operation,
+                    Account = "YOUR_ACCOUNT" // Здесь должен быть ID вашего счета
+                };
+
+                await _quik.Orders.CreateOrder(order);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при выставлении ордера: {ex.Message}");
+            }
+        }
+
+        public async Task HandleOrderExecution(Order order)
+        {
+            decimal closePrice = order.Operation == Operation.Buy
+                ? order.Price + _gridStep
+                : order.Price - _gridStep;
+
+            await PlaceOrder(order.Operation == Operation.Buy ? Operation.Sell : Operation.Buy, closePrice);
+        }
     }
 }
