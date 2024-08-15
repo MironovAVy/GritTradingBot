@@ -151,6 +151,8 @@ namespace new1
         private readonly string _secCode;
         private readonly string _classCode;
         private readonly decimal _gridStep;
+        private Tool _tool;
+
 
         public OrderManager(Quik quik, string secCode, string classCode, decimal gridStep)
         {
@@ -183,7 +185,7 @@ namespace new1
                     Price = price,
                     Quantity = 1,
                     Operation = operation,
-                    Account = "YOUR_ACCOUNT" // Здесь должен быть ID вашего счета
+                    Account = _tool.AccountID,
                 };
 
                 await _quik.Orders.CreateOrder(order);
